@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="kk">
+<head>
+  <meta charset="utf-8">
+  <title>Жергілікті аймақтағы эпидемия/вирус ошақтары — EpidemicSim</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { font-family: "Inter", sans-serif; padding-top: 90px; background: linear-gradient(135deg,#eef7ff,#f7fbff); }
+    .big-title{ font-weight:800; background:linear-gradient(45deg,#0ea5e9,#6366f1); -webkit-background-clip:text; color:transparent; font-size:28px }
+     .globe-container{ height:520px; border-radius:10px; overflow:hidden; position:relative }
+     /* Leaflet map size */
+     #kzMap{ height:520px; border-radius:10px; }
+  </style>
+</head>
+<body>
+
+  {% include 'navbar.html' %}
+
+  <div class="container py-5">
+    <div class="row">
+      <div class="col-12">
+        <div class="card p-4 shadow-sm">
+          <h2 class="big-title">Жергілікті аймақтағы эпидемия/вирус ошақтары</h2>
+          <p class="text-muted">Бұл бетте сіз жергілікті аймақта тіркелген эпидемия/вирус ошақтарының қысқаша тізімін және олардың орналасқан жерін көресіз. Тізімдегі элементтерге басқанда глобус сол орынға ұшады.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="row g-4 mt-3">
+      <div class="col-lg-4">
+        <div class="card p-3">
+          <h5>Жергілікті ошақтар</h5>
+          <div id="localList" style="max-height:480px; overflow:auto;">
+            {% for o in local_outbreaks %}
+                <div class="d-flex align-items-center justify-content-between py-2 border-bottom local-item" data-index="{{ loop.index0 }}" data-lat="{{ o.lat }}" data-lng="{{ o.lng }}">
+                  <div>
+                    <div class="fw-semibold">{{ o.region }}</div>
+                    <div class="small text-muted">Жалпы жұққандар: {{ o.cases }}</div>
+                  </div>
+                  <div class="d-flex gap-2 align-items-center">
+                    <button type="button" class="btn btn-sm btn-outline-primary btn-fly">Көрсету</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary btn-highlight">Нақты көрсету</button>
+                  </div>
+                </div>
+              {% endfor %}
+          </div>
+        </div>
+      </div>
+
+      <div class="col-lg-8">
+        <div class="card p-3 globe-view">
+             <h5 class="mb-3">Қазақстан картасы — облыстар бойынша ошақтар</h5>
+             <div id="kzMap" class="globe-container"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+      <!-- JSON payload for JS (local outbreaks for Kazakhstan) -->
+      <script id="kzOutbreaksData" type="application/json">{{ local_outbreaks|tojson|safe }}</script>
+
+      <!-- Leaflet -->
+      <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="" crossorigin=""/>
+      <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+      <script>
+      document.addEventListener('DOMContentLoaded', function(){
+        const dataEl = document.getElementById('kzOutbreaksData');
+        let outbreaks = [];
+        try{ outbreaks = dataEl ? JSON.parse(dataEl.textContent || '[]') : []; }catch(e){ outbreaks = []; }
+
+        // init Leaflet map centered on Kazakhstan
+        const map = L.map('kzMap', { zoomControl:true }).setView([48.0, 66.0], 4);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          maxZoom: 18,
+          attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(map);
+
+        const allLatLngs = [];
+        const originLayers = []; // store markers and lines per origin
+
+        outbreaks.forEach((origin, idx) => {
+          const oLatLng = [origin.lat, origin.lng];
+          allLatLngs.push(oLatLng);
+
+          // origin marker (bigger)
+          const originMarker = L.circleMarker(oLatLng, {
+            radius: Math.min(20, 6 + Math.sqrt(origin.cases)),
+            color: '#a11',
+            fillColor: '#ff3b30',
+            fillOpacity: 0.9,
+            weight: 1
+          }).addTo(map).bindPopup(`<strong>${origin.region}</strong><br>Cases: ${origin.cases}`);
+
+          const targetMarkers = [];
+          const lines = [];
+
+          (origin.spread_to || []).forEach(t => {
+            const tLatLng = [t.lat, t.lng];
+            allLatLngs.push(tLatLng);
+
+            const targetMarker = L.circleMarker(tLatLng, {
+              radius: Math.min(12, 4 + Math.sqrt(t.cases || 1)),
+              color: '#d9534f',
+              fillColor: '#f77',
+              fillOpacity: 0.8,
+              weight: 1
+            }).addTo(map).bindPopup(`<strong>${t.region}</strong><br>Cases: ${t.cases}`);
+
+            const line = L.polyline([oLatLng, tLatLng], { color: '#ff6b6b', weight: 2, dashArray: '6 6' }).addTo(map);
+
+            targetMarkers.push(targetMarker);
+            lines.push(line);
+          });
+
+          originLayers[idx] = {
+            originMarker: originMarker,
+            targets: targetMarkers,
+            lines: lines,
+            data: origin
+          };
+        });
+
+        if(allLatLngs.length) map.fitBounds(allLatLngs, { padding: [40,40] });
+
+        // helper to reset styles
+        function resetStyles(){
+          originLayers.forEach(item => {
+            try{ item.originMarker.setStyle({ radius: Math.min(20, 6 + Math.sqrt(item.data.cases)), color: '#a11', fillColor: '#ff3b30', fillOpacity:0.9, weight:1 }); }catch(e){}
+            (item.targets || []).forEach(m => { try{ m.setStyle({ radius: Math.min(12, 4 + Math.sqrt(1)), color:'#d9534f', fillColor:'#f77', fillOpacity:0.8, weight:1 }); }catch(e){} });
+            (item.lines || []).forEach(l => { try{ l.setStyle({ color:'#ff6b6b', weight:2, dashArray:'6 6', opacity:0.8 }); }catch(e){} });
+          });
+        }
+
+        // highlight a specific origin and its spread
+        function highlightOrigin(idx){
+          resetStyles();
+          const item = originLayers[idx];
+          if(!item) return;
+          try{ item.originMarker.setStyle({ radius: Math.min(26, 10 + Math.sqrt(item.data.cases)), color: '#550000', fillColor: '#ff1f1f', fillOpacity:1, weight:2 }); }catch(e){}
+          (item.targets || []).forEach(m => { try{ m.setStyle({ radius: Math.min(14, 6 + Math.sqrt(1)), color:'#b33', fillColor:'#ff9b9b', fillOpacity:0.95, weight:1 }); }catch(e){} });
+          (item.lines || []).forEach(l => { try{ l.setStyle({ color:'#ff2e2e', weight:3, dashArray: null, opacity:1 }); }catch(e){} });
+          // open popup for origin and pan next to it
+          try{ item.originMarker.openPopup(); map.setView(item.originMarker.getLatLng(), 7, { animate:true }); }catch(e){}
+        }
+
+        // wire left list buttons to pan to origin region and highlight
+        document.querySelectorAll('#localList .local-item').forEach(el => {
+          const idx = parseInt(el.getAttribute('data-index'));
+          const flyBtn = el.querySelector('.btn-fly');
+          const hBtn = el.querySelector('.btn-highlight');
+          if(flyBtn){ flyBtn.addEventListener('click', function(){ const lat = parseFloat(el.getAttribute('data-lat')); const lng = parseFloat(el.getAttribute('data-lng')); if(!Number.isNaN(lat)&&!Number.isNaN(lng)) map.setView([lat,lng],7,{animate:true}); }); }
+          if(hBtn){ hBtn.addEventListener('click', function(){ highlightOrigin(idx); }); }
+          // also allow clicking the whole item to highlight
+          el.addEventListener('click', function(ev){ if(ev.target.closest('.btn-fly')||ev.target.closest('.btn-highlight')) return; highlightOrigin(idx); });
+        });
+      });
+      </script>
+
+</body>
+</html>

@@ -1,0 +1,213 @@
+<div class="container py-4">
+    <div class="row g-4">
+
+        <div class="col-12">
+            <div class="card p-4 mb-4">
+                <h2 class="big-title">Таралу аймағы — Бақылау панелі</h2>
+                <p class="text-muted">Бұл бет жоғарғы мәзірдегі "Таралу аймағы" үшін арнайы контент көрсетеді. Егер сіз симуляцияны жүргізкіңіз келсе, "Эпидемия/Вирус статистикасы" бетіне өтіп, параметрлерді енгізіңіз және симуляцияны іске қосыңыз.</p>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card p-3 param-card shadow-sm">
+                <div class="d-flex align-items-start justify-content-between mb-3">
+                    <div>
+                        <div class="h5 mb-0">Таралу аймағы</div>
+                        <div class="text-muted small">Эпидемиялар мен вирустар</div>
+                    </div>
+                    <div>
+                        <a href="/stats" class="btn btn-sm btn-outline-primary">Симуляция</a>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <input id="virusSearch" class="form-control" placeholder="Іздеу, мысалы: COVID"/>
+                </div>
+
+                {% if viruses %}
+                    <div id="virusList" class="list-group list-group-flush" style="max-height:380px; overflow:auto;">
+                        {% for v in viruses %}
+                            <div class="list-group-item d-flex align-items-center gap-3 py-3" data-name="{{ v.name|lower }}" data-lat="{{ v.lat }}" data-lng="{{ v.lng }}">
+                                <div class="avatar bg-primary text-white rounded-circle d-flex align-items-center justify-content-center">{{ v.name[:2] }}</div>
+                                <div class="flex-fill">
+                                    <div class="fw-semibold">{{ v.name }}</div>
+                                    <div class="text-muted small">{{ v.desc }}</div>
+                                </div>
+                                <div class="ms-2">
+                                    <button class="btn btn-sm btn-outline-danger" onclick="flyToVirus({{ v.lat }}, {{ v.lng }})">Көрсету</button>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <p class="small text-muted">Вирустар тізімі бос — әкімші тараптан мәлімет қажет.</p>
+                {% endif %}
+
+                <div class="d-flex justify-content-between mt-3">
+                    <button class="btn btn-sm btn-light border" onclick="resetView()">Бастапқы көрініс</button>
+                    <a href="/stats" class="btn btn-sm btn-primary">Толығырақ</a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-8">
+            <div class="card p-3 data-table-card">
+                    <div class="d-flex align-items-center justify-content-between mb-3">
+                        <h3 class="h6 mb-0">Интерактивті глобус</h3>
+                        <div class="text-muted small">Айналдырып қарап, масштабтаңыз</div>
+                    </div>
+
+                    <div id="globeViz" class="globe-container d-flex align-items-center justify-content-center">
+                        <div id="globeLoader"><div class="spinner"></div>Глобус жүктелуде...</div>
+                    </div>
+
+                    <!-- Plot removed from this spread view per user request -->
+
+                    <div class="mt-3 d-flex gap-3 align-items-center">
+                        <div class="legend d-flex gap-2 align-items-center">
+                            <span class="legend-dot" style="background:#ff3b30"></span>
+                            <span class="small text-muted">Белгілер — вирустық ошақтар</span>
+                        </div>
+                        <div class="small text-muted ms-auto">Глобусқа кез келген уақытта ұшып баруға болады</div>
+                    </div>
+                </div>
+        </div>
+
+    </div>
+</div>
+
+<script>
+    // Initialize Globe when library is available. Poll briefly if needed.
+    document.addEventListener('DOMContentLoaded', () => {
+        const MAX_WAIT = 5000; // ms
+        const INTERVAL = 100; // ms
+        let waited = 0;
+
+        const viruses = {{ viruses|tojson }} || [];
+
+        function initGlobe(){
+            try{
+                // build a few arcs from the first virus to others for a dramatic effect
+                const arcs = (viruses || []).slice(1).map(d => ({
+                    startLat: viruses[0].lat,
+                    startLng: viruses[0].lng,
+                    endLat: d.lat,
+                    endLng: d.lng,
+                    value: Math.round(Math.random()*100)
+                }));
+
+                const world = Globe()(document.getElementById('globeViz'))
+                    // use a bright day texture for a light, pleasant look
+                    .globeImageUrl('https://unpkg.com/three-globe/example/img/earth-day.jpg')
+                    .bumpImageUrl('https://unpkg.com/three-globe/example/img/earth-topology.png')
+                    .showAtmosphere(true)
+                    .atmosphereColor('rgba(6,182,212,0.12)')
+                    .atmosphereAltitude(0.06)
+
+                    // points (viruses) styled in teal/cyan for a pleasant palette
+                    .pointsData(viruses)
+                    .pointLat(d => d.lat)
+                    .pointLng(d => d.lng)
+                    .pointAltitude(d => 0.035 + (Math.random() * 0.015))
+                    .pointRadius(0.6)
+                    .pointColor(d => '#ff3b30')
+                    .pointsTransitionDuration(900)
+
+                    // labels next to points
+                    .labelsData(viruses)
+                    .labelLat(d => d.lat)
+                    .labelLng(d => d.lng)
+                    .labelText(d => d.name)
+                    .labelSize(d => 1.2)
+                    .labelColor(() => 'rgba(2,6,23,0.9)')
+                    .labelDotRadius(0.5)
+
+                    // animated arcs to show spread with complementary colors
+                    .arcsData(arcs)
+                    .arcStartLat(d => d.startLat)
+                    .arcStartLng(d => d.startLng)
+                    .arcEndLat(d => d.endLat)
+                    .arcEndLng(d => d.endLng)
+                    .arcColor(d => [['rgba(6,182,212,0.95)','rgba(99,102,241,0.75)'][(Math.random()*1)|0]])
+                    .arcAltitude(0.22)
+                    .arcStroke(1.2)
+                    .arcDashLength(0.4)
+                    .arcDashGap(0.6)
+                    .arcDashAnimateTime(3500);
+
+                // camera + controls
+                world.controls().autoRotate = true;
+                world.controls().autoRotateSpeed = 0.25;
+                world.controls().enableZoom = true;
+
+                window.flyToVirus = function(lat, lng){
+                    try{ world.pointOfView({ lat: lat, lng: lng, altitude: 1.4 }, 1000); }
+                    catch(e){ console.warn(e); }
+                };
+
+                // hide loader
+                const loader = document.getElementById('globeLoader');
+                if(loader) loader.style.display = 'none';
+
+                if(viruses.length){ setTimeout(()=> flyToVirus(viruses[0].lat, viruses[0].lng), 600); }
+                return true;
+            }catch(e){
+                console.warn('Globe init failed, will retry', e);
+                return false;
+            }
+        }
+
+        function waitForGlobe(){
+            if(typeof Globe !== 'undefined'){
+                if(initGlobe()) return;
+            }
+            if(waited >= MAX_WAIT){
+                const loader = document.getElementById('globeLoader');
+                if(loader) loader.innerText = 'Глобус жүктелмеді (CDN жоқ).';
+                return;
+            }
+            waited += INTERVAL;
+            setTimeout(waitForGlobe, INTERVAL);
+        }
+
+        waitForGlobe();
+    });
+</script>
+
+<script>
+    // List search/filter
+    document.addEventListener('DOMContentLoaded', function(){
+        const search = document.getElementById('virusSearch');
+        if(!search) return;
+        search.addEventListener('input', function(){
+            const q = this.value.trim().toLowerCase();
+            document.querySelectorAll('#virusList .list-group-item, #virusList .virus-card').forEach(el=>{
+                const name = el.getAttribute('data-name') || '';
+                if(!q || name.indexOf(q) !== -1) el.style.display = '';
+                else el.style.display = 'none';
+            });
+        });
+    });
+
+    function resetView(){
+        if(typeof window.flyToVirus === 'function' && ({{ viruses|length }}>0)){
+            const v = {{ viruses|tojson }}[0];
+            flyToVirus(v.lat, v.lng);
+        }
+    }
+</script>
+
+<style>
+/* Spread area custom styles */
+.param-card .avatar{ width:44px; height:44px; font-weight:700; }
+.avatar{ width:44px; height:44px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-weight:700; }
+.avatar.bg-primary{ background: linear-gradient(135deg,#06b6d4,#4f46e5); }
+.globe-container{ height:480px; border-radius:10px; overflow:hidden; position:relative; }
+#globeViz{ width:100%; height:100%; }
+#globeLoader{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:linear-gradient(180deg, rgba(255,255,255,0.6), rgba(255,255,255,0.35)); z-index:40; }
+.spinner{ width:32px; height:32px; border-radius:50%; border:4px solid rgba(0,0,0,0.08); border-top-color:rgba(59,130,246,1); animation: spin 1s linear infinite; }
+@keyframes spin{ to{ transform:rotate(360deg);} }
+.list-group-item{ transition: transform .12s ease, box-shadow .12s ease; }
+.list-group-item:hover{ transform:translateY(-4px); box-shadow:0 6px 18px rgba(2,6,23,0.08);} 
+.legend-dot{ width:12px; height:12px; border-radius:50%; display:inline-block; }
+</style>
