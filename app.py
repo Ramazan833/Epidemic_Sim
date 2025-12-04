@@ -8,7 +8,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ThreadPoolExecutor
 from flask import Flask, render_template, request, session, url_for
 
 app = Flask(__name__)
@@ -30,30 +30,137 @@ VIRUSES = [
 LOCAL_OUTBREAKS = [
     {
         "region": "Almaty",
+        "disease": "COVID-19",
         "lat": 43.2383,
         "lng": 76.9450,
         "cases": 420,
         "spread_to": [
-            {"region": "Shymkent", "lat": 42.3417, "lng": 69.5901, "cases": 120},
-            {"region": "Karaganda", "lat": 49.8067, "lng": 73.0851, "cases": 60}
+            {"region": "Shymkent", "disease": "COVID-19", "lat": 42.3417, "lng": 69.5901, "cases": 120},
+            {"region": "Kyzylorda", "disease": "COVID-19", "lat": 44.8489, "lng": 65.4821, "cases": 40},
+            {"region": "Zhambyl (Taraz)", "disease": "COVID-19", "lat": 42.8986, "lng": 71.3667, "cases": 55}
         ]
     },
     {
         "region": "Nur-Sultan",
+        "disease": "Influenza",
         "lat": 51.1605,
         "lng": 71.4704,
         "cases": 310,
         "spread_to": [
-            {"region": "Pavlodar", "lat": 52.2978, "lng": 76.9450, "cases": 45}
+            {"region": "Pavlodar", "disease": "Influenza", "lat": 52.2978, "lng": 76.9450, "cases": 45},
+            {"region": "Karaganda", "disease": "Influenza", "lat": 49.8067, "lng": 73.0851, "cases": 70}
+        ]
+    },
+    {
+        "region": "Shymkent",
+        "disease": "Measles",
+        "lat": 42.3417,
+        "lng": 69.5901,
+        "cases": 210,
+        "spread_to": [
+            {"region": "Turkistan", "disease": "Measles", "lat": 43.3136, "lng": 68.2599, "cases": 80},
+            {"region": "Kyzylorda", "disease": "Measles", "lat": 44.8489, "lng": 65.4821, "cases": 20}
         ]
     },
     {
         "region": "Aktobe",
+        "disease": "Cholera",
         "lat": 50.2839,
         "lng": 57.1669,
         "cases": 95,
         "spread_to": [
-            {"region": "Karaganda", "lat": 49.8067, "lng": 73.0851, "cases": 30}
+            {"region": "Oral", "disease": "Cholera", "lat": 51.2181, "lng": 51.3597, "cases": 25}
+        ]
+    },
+    {
+        "region": "Aktau",
+        "disease": "Gastroenteritis",
+        "lat": 43.6542,
+        "lng": 51.2000,
+        "cases": 60,
+        "spread_to": [
+            {"region": "Zhanaozen", "disease": "Gastroenteritis", "lat": 43.3333, "lng": 52.8250, "cases": 18}
+        ]
+    },
+    {
+        "region": "Atyrau",
+        "disease": "Influenza",
+        "lat": 47.1004,
+        "lng": 51.8796,
+        "cases": 130,
+        "spread_to": [
+            {"region": "Aktobe", "disease": "Influenza", "lat": 50.2839, "lng": 57.1669, "cases": 35}
+        ]
+    },
+    {
+        "region": "Karaganda",
+        "disease": "COVID-19",
+        "lat": 49.8067,
+        "lng": 73.0851,
+        "cases": 180,
+        "spread_to": [
+            {"region": "Pavlodar", "disease": "COVID-19", "lat": 52.2978, "lng": 76.9450, "cases": 40},
+            {"region": "Kostanay", "disease": "COVID-19", "lat": 53.2194, "lng": 63.6246, "cases": 22}
+        ]
+    },
+    {
+        "region": "Pavlodar",
+        "disease": "Influenza",
+        "lat": 52.2978,
+        "lng": 76.9450,
+        "cases": 75,
+        "spread_to": [
+            {"region": "Semey (Öskemen)", "disease": "Influenza", "lat": 49.9688, "lng": 82.6141, "cases": 30}
+        ]
+    },
+    {
+        "region": "Kostanay",
+        "disease": "Diphtheria",
+        "lat": 53.2194,
+        "lng": 63.6246,
+        "cases": 40,
+        "spread_to": [
+            {"region": "Petropavl", "disease": "Diphtheria", "lat": 54.8741, "lng": 69.1606, "cases": 12}
+        ]
+    },
+    {
+        "region": "Kyzylorda",
+        "disease": "COVID-19",
+        "lat": 44.8489,
+        "lng": 65.4821,
+        "cases": 68,
+        "spread_to": [
+            {"region": "Shymkent", "disease": "COVID-19", "lat": 42.3417, "lng": 69.5901, "cases": 22}
+        ]
+    },
+    {
+        "region": "Taraz",
+        "disease": "Measles",
+        "lat": 42.8986,
+        "lng": 71.3667,
+        "cases": 55,
+        "spread_to": [
+            {"region": "Almaty", "disease": "Measles", "lat": 43.2383, "lng": 76.9450, "cases": 10}
+        ]
+    },
+    {
+        "region": "Petropavl",
+        "disease": "COVID-19",
+        "lat": 54.8741,
+        "lng": 69.1606,
+        "cases": 48,
+        "spread_to": [
+            {"region": "Kostanay", "disease": "COVID-19", "lat": 53.2194, "lng": 63.6246, "cases": 8}
+        ]
+    },
+    {
+        "region": "Turkistan",
+        "disease": "Cholera",
+        "lat": 43.3136,
+        "lng": 68.2599,
+        "cases": 90,
+        "spread_to": [
+            {"region": "Shymkent", "disease": "Cholera", "lat": 42.3417, "lng": 69.5901, "cases": 30}
         ]
     }
 ]
@@ -116,7 +223,8 @@ def run_parallel_simulations(beta, gamma, days, N, I0, n_sims):
         args_list.append((beta, gamma, days, N, I0, seed, sim_id))
 
     results = []
-    with ProcessPoolExecutor() as executor:
+    # Use ThreadPoolExecutor to avoid Windows pickling issues with ProcessPool
+    with ThreadPoolExecutor() as executor:
         for df in executor.map(unpack_and_run, args_list):
             results.append(df)
 

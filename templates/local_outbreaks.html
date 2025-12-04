@@ -11,6 +11,14 @@
      .globe-container{ height:520px; border-radius:10px; overflow:hidden; position:relative }
      /* Leaflet map size */
      #kzMap{ height:520px; border-radius:10px; }
+    /* Left panel item styling */
+    .local-item { background: white; border-radius: 12px; box-shadow: 0 8px 20px rgba(2,6,23,0.04); }
+    .local-item .virus-avatar{ width:48px; height:48px; border-radius:12px; font-size:14px; }
+    .local-item .badge { font-size: 12px; }
+    .target-item { background: transparent; padding: 10px 12px; border-radius: 8px; margin-bottom:8px; }
+    .target-item.list-group-item { background: #ffffff; }
+    .target-item:hover, .local-item:hover { transform: translateY(-3px); transition: all .12s ease; }
+    .fw-medium{ font-weight:600; }
   </style>
 </head>
 <body>
@@ -30,20 +38,68 @@
     <div class="row g-4 mt-3">
       <div class="col-lg-4">
         <div class="card p-3">
-          <h5>Жергілікті ошақтар</h5>
-          <div id="localList" style="max-height:480px; overflow:auto;">
+          <div class="d-flex align-items-center justify-content-between mb-3">
+            <div>
+              <h5 class="mb-0">Жергілікті ошақтар</h5>
+              <div class="small text-muted">Облыстар бойынша шыққан ошақтар мен олардың таралу аймақтары</div>
+            </div>
+            <div class="text-end">
+              {% set totals = namespace(count=0, cases=0) %}
+              {% for o in local_outbreaks %}
+                {% set totals.count = totals.count + 1 %}
+                {% set totals.cases = totals.cases + o.cases %}
+              {% endfor %}
+              <div class="small text-muted">Ошақтар: <strong>{{ totals.count }}</strong></div>
+              <div class="small text-muted">Жалпы жұққандар: <strong>{{ totals.cases }}</strong></div>
+            </div>
+          </div>
+
+          <div class="mb-2">
+            <input id="localSearch" class="form-control form-control-sm" placeholder="Іздеу: облыс немесе ауру (мыс: Almaty, COVID)" />
+          </div>
+
+          <div id="localList" style="max-height:440px; overflow:auto;">
             {% for o in local_outbreaks %}
-                <div class="d-flex align-items-center justify-content-between py-2 border-bottom local-item" data-index="{{ loop.index0 }}" data-lat="{{ o.lat }}" data-lng="{{ o.lng }}">
-                  <div>
-                    <div class="fw-semibold">{{ o.region }}</div>
-                    <div class="small text-muted">Жалпы жұққандар: {{ o.cases }}</div>
-                  </div>
-                  <div class="d-flex gap-2 align-items-center">
-                    <button type="button" class="btn btn-sm btn-outline-primary btn-fly">Көрсету</button>
-                    <button type="button" class="btn btn-sm btn-outline-secondary btn-highlight">Нақты көрсету</button>
+                {% set outer_idx = loop.index0 %}
+                <div class="list-group-item local-item p-3 mb-2" data-index="{{ outer_idx }}" data-lat="{{ o.lat }}" data-lng="{{ o.lng }}" data-name="{{ o.region }} {{ o.disease }}">
+                  <div class="d-flex align-items-start">
+                      <div class="me-3">
+                      <div class="virus-avatar">{{ o.region[:2]|upper }}</div>
+                    </div>
+                    <div class="flex-fill">
+                      <div class="d-flex align-items-baseline justify-content-between">
+                        <div>
+                          <div class="fw-semibold">{{ o.region }}</div>
+                          <div class="small text-muted">{{ o.disease }}</div>
+                        </div>
+                        <div class="text-end">
+                          <div><span class="badge bg-danger">{{ o.cases }} адам</span></div>
+                        </div>
+                      </div>
+                      <div class="mt-2">
+                        <div class="d-flex gap-2">
+                          <button type="button" class="btn btn-sm btn-outline-primary btn-fly">Көрсету</button>
+                          <button type="button" class="btn btn-sm btn-outline-secondary btn-highlight">Нақты көрсету</button>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
-              {% endfor %}
+
+                {% for t in o.spread_to %}
+                  <div class="ps-4 pe-2 py-2 border-start target-item list-group-item" data-origin-index="{{ outer_idx }}" data-target-index="{{ loop.index0 }}" data-lat="{{ t.lat }}" data-lng="{{ t.lng }}" data-name="{{ t.region }} {{ t.disease }}">
+                    <div class="d-flex align-items-center justify-content-between">
+                      <div>
+                        <div class="fw-medium">{{ t.region }}</div>
+                        <div class="small text-muted">{{ t.disease }} — жұққандар: {{ t.cases }} адам</div>
+                      </div>
+                      <div>
+                        <button type="button" class="btn btn-sm btn-outline-info btn-show-target">Көрсету</button>
+                      </div>
+                    </div>
+                  </div>
+                {% endfor %}
+            {% endfor %}
           </div>
         </div>
       </div>
@@ -91,7 +147,7 @@
             fillColor: '#ff3b30',
             fillOpacity: 0.9,
             weight: 1
-          }).addTo(map).bindPopup(`<strong>${origin.region}</strong><br>Cases: ${origin.cases}`);
+          }).addTo(map).bindPopup(`<strong>${origin.region}</strong><br>Disease: ${origin.disease || '—'}<br>Cases: ${origin.cases}`);
 
           const targetMarkers = [];
           const lines = [];
@@ -106,7 +162,7 @@
               fillColor: '#f77',
               fillOpacity: 0.8,
               weight: 1
-            }).addTo(map).bindPopup(`<strong>${t.region}</strong><br>Cases: ${t.cases}`);
+            }).addTo(map).bindPopup(`<strong>${t.region}</strong><br>Disease: ${t.disease || '—'}<br>Cases: ${t.cases}`);
 
             const line = L.polyline([oLatLng, tLatLng], { color: '#ff6b6b', weight: 2, dashArray: '6 6' }).addTo(map);
 
@@ -155,6 +211,39 @@
           // also allow clicking the whole item to highlight
           el.addEventListener('click', function(ev){ if(ev.target.closest('.btn-fly')||ev.target.closest('.btn-highlight')) return; highlightOrigin(idx); });
         });
+
+        // wire target items (spread-to) to show specific target marker and highlight
+        document.querySelectorAll('#localList .target-item').forEach(el => {
+          const originIdx = parseInt(el.getAttribute('data-origin-index'));
+          const targetIdx = parseInt(el.getAttribute('data-target-index'));
+          const showBtn = el.querySelector('.btn-show-target');
+          function showTarget(){
+            const item = originLayers[originIdx];
+            if(!item) return;
+            const marker = item.targets[targetIdx];
+            const line = item.lines[targetIdx];
+            if(!marker) return;
+            resetStyles();
+            try{ marker.setStyle({ radius: Math.min(16, 6 + Math.sqrt(1)), color:'#8b0000', fillColor:'#ffb3b3', fillOpacity:1, weight:2 }); }catch(e){}
+            if(line){ try{ line.setStyle({ color:'#ff2e2e', weight:3, dashArray:null, opacity:1 }); }catch(e){} }
+            try{ item.originMarker.setStyle({ radius: Math.min(24, 8 + Math.sqrt(item.data.cases)), color:'#550000', fillColor:'#ff1f1f', fillOpacity:1, weight:2 }); }catch(e){}
+            try{ map.setView(marker.getLatLng(), 7, { animate:true }); marker.openPopup(); }catch(e){}
+          }
+          if(showBtn) showBtn.addEventListener('click', showTarget);
+          el.addEventListener('click', function(ev){ if(ev.target.closest('.btn-show-target')) return; showTarget(); });
+        });
+
+        // local search filter for origins and targets
+        const localSearch = document.getElementById('localSearch');
+        if(localSearch){
+          localSearch.addEventListener('input', function(){
+            const q = this.value.trim().toLowerCase();
+            document.querySelectorAll('#localList [data-name]').forEach(el=>{
+              const name = (el.getAttribute('data-name')||'').toLowerCase();
+              if(!q || name.indexOf(q)!==-1) el.style.display=''; else el.style.display='none';
+            });
+          });
+        }
       });
       </script>
 
